@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-agent
+  namespace: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-agent
+  template:
+    metadata:
+      labels:
+        app: rag-agent
+    spec:
+      containers:
+      - name: rag-agent
+        image: yogender027/ollama-n8n-rag:1.0.1
+        ports:
+        - containerPort: 8080
+        env:
+          - name: OLLAMA_HOST
+            value: http://ollama-service.ollama.svc.cluster.local:11434
+        volumeMounts:
+          - name: local-model-volume
+            mountPath: /app/local   # Adjust based on your app
+            readOnly: false
+          - mountPath: /data
+            name: shared-data
+      volumes:
+        - name: local-model-volume
+          persistentVolumeClaim:
+            claimName: local-pvc
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: rag-n8n-shared-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-agent
+  namespace: ollama
+spec:
+  selector:
+    app: rag-agent
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: standard
+  hostPath:
+    path: /local_model
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-pvc
+  namespace: ollama
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: local-pv

@@ -1,0 +1,660 @@
+https://phoenixnap.com/kb/kubernetes-kind
+
+https://www.youtube.com/watch?v=6xmWr7p5TE0
+#######################
+
+
+# How to create an ingress controller in Kubernetes
+
+To create an ingress controller in a KIND cluster, you can apply the official NGINX ingress controller manifest:
+
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+This sets up an ingress controller in the `ingress-nginx` namespace that allows HTTP routing for your services.
+
+
+
+
+
+########################
+
+#install kind
+# For AMD64 / x86_64
+[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+
+chmod +x ./kind
+
+sudo mv ./kind /usr/local/bin/kind
+
+#Crate cluster:
+sudo kind create cluster --name=test-prometheus-grafana
+
+
+#delete cluster:
+kind delete cluster
+kind delete cluster --name kind-cilium
+
+# kind cluster with port forwarding to host
+kind create cluster --config kind-test-cluster-port-forward.yaml
+
+kind get clusters
+kubectl cluster-info --context kind-kind-test
+
+#Create ingres controller:
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+#check th epods of controller:
+kubectl get pods -n ingress-nginx
+
+
+
+#Create sample deployment:
+
+nano test-deployment.yaml
+<<<<<<<<<<<<<<<<<
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: test-app
+  labels:
+    app: test-app
+spec:
+  containers:
+  - name: test-app
+    image: hashicorp/http-echo:latest
+    args:
+    - "-text=The test has been successful!"
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: test-service
+spec:
+  selector:
+    app: test-app
+  ports:
+  - port: 5678
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-ingress
+spec:
+  rules:
+  - http:
+      paths:
+      - pathType: Prefix
+        path: "/app"
+        backend:
+          service:
+            name: test-service
+            port:
+              number: 5678
+
+
+>>>>>>>>>>>>>>>>>
+
+
+kubectl get pods
+
+#port forward from local host to service at port 5678
+kubectl port-forward service/test-service 5678:5678
+
+########################################################
+###Promethus grafana stack################################
+########################################################
+
+#install helm:
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+#Add helm repo for prometheus and grafana:
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+#namespace
+kubectl create namespace monitoring
+
+#deploy prometheus:
+helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring
+
+#This will deploy the following components:
+
+#Prometheus for monitoring
+#Alertmanager for handling alerts
+#Grafana for visualization
+#Node Exporter and Kube-State-Metrics for additional metrics
+
+#Output:
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+kube-prometheus-stack has been installed. Check its status by running:
+  kubectl --namespace monitoring get pods -l "release=prometheus"
+
+Get Grafana 'admin' user password by running:
+
+  kubectl --namespace monitoring get secrets prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+
+Access Grafana local instance:
+
+  export POD_NAME=$(kubectl --namespace monitoring get pod -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=prometheus" -oname)
+  kubectl --namespace monitoring port-forward $POD_NAME 3000
+
+Visit https://github.com/prometheus-operator/kube-prometheus for instructions on how to create & configure Alertmanager and Prometheus instances using the Operator.
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$$$$$$$$$$$$$$$$$$$$$run:$$$$$$$$$$$$$$$$$$$$$$$$$$
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$ kubectl --namespace monitoring get pods -l "release=prometheus"
+NAME                                                   READY   STATUS    RESTARTS   AGE
+prometheus-kube-prometheus-operator-66b74b8df7-fpldn   1/1     Running   0          3m5s
+prometheus-kube-state-metrics-5bc7f89f46-jl9hz         1/1     Running   0          3m5s
+prometheus-prometheus-node-exporter-j2rgc              1/1     Running   0          3m5s
+
+#prometheus-kube-prometheus-operator-66b74b8df7-fpldn  this is prometheus opetrator 
+#prometheus-kube-state-metrics – Collects metrics from Kubernetes resources (like pods, nodes, etc.).
+prometheus-prometheus-node-exporter – Exposes node-level metrics to Prometheus.
+
+
+#######################
+#Grafana###############
+#######################
+
+
+#Get Grafana 'admin' user password by running:
+kubectl --namespace monitoring get secrets prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+# output: prom-operator
+
+
+#Now port forward from pods 3000 pod to localhost 3000 port. We use kubectl, so we bypass the docker portforwarding. 
+#Usually we need to port forward from locahost -> docker -> pod, but since we are using kubectl it directly connects to kubernetes API server
+
+kubectl --namespace monitoring port-forward prometheus-grafana-68589f687c-npmnl 3000:3000
+
+
+#Now run 127.0.0.1:3000 in browser, username: admin, pass: prom-operator
+
+
+############################
+####Expose svc prometheus###
+#############################
+kubectl port-forward svc/prometheus-operated -n monitoring 9090:9090
+
+#run localhost:9090
+
+
+##################################################
+#COnnecting grafana to prometheus as data source#
+#################################################
+
+Go to grafana 127.0.0.1:3000, connections -> search for prometheus as  add datasource.
+put url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+prometheus-operated is the svc name for prometheus pod, monitoring is namespace, svc.cluster.local is clusterIP service on port 9090.
+Remember external to cluster, its available at 127.0.0.1:3000 as we exposed it as kubectl port-forward svc/prometheus-operated -n monitoring 9090:9090
+save and test, should be green
+
+#############################
+#showing some data###########
+############################
+
+GO to dashboards -> Kubernetes / Compute Resources / Cluster
+
+Here you can see the the cpu usage etc
+
+Go to dashboards -> Kubernetes / Compute Resources / Namespace (Pods) 
+here you can see the namspace level pod level cpu and memory usage. for example the postgres ones I deployed.
+
+########################################################
+#How to use query in pormethues and grafana using promql
+########################################################
+
+$oc get pods -n monitoring
+NAME                                                     READY   STATUS    RESTARTS   AGE
+alertmanager-prometheus-kube-prometheus-alertmanager-0   2/2     Running   0          44h
+prometheus-grafana-68589f687c-npmnl                      3/3     Running   0          44h
+prometheus-kube-prometheus-operator-66b74b8df7-fpldn     1/1     Running   0          44h
+prometheus-kube-state-metrics-5bc7f89f46-jl9hz           1/1     Running   0          44h
+prometheus-prometheus-kube-prometheus-prometheus-0       2/2     Running   0          44h
+prometheus-prometheus-node-exporter-j2rgc
+
+#This prometheus-kube-state-metrics-5bc7f89f46-jl9hz  is the state metrics pod exposing the scrpped data by the promethus
+
+
+
+$oc get svc -n monitoring
+NAME                                      TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE
+alertmanager-operated                     ClusterIP   None            <none>        9093/TCP,9094/TCP,9094/UDP   45h
+prometheus-grafana                        ClusterIP   10.96.221.147   <none>        80/TCP                       45h
+prometheus-kube-prometheus-alertmanager   ClusterIP   10.96.244.69    <none>        9093/TCP,8080/TCP            45h
+prometheus-kube-prometheus-operator       ClusterIP   10.96.154.164   <none>        443/TCP                      45h
+prometheus-kube-prometheus-prometheus     ClusterIP   10.96.200.48    <none>        9090/TCP,8080/TCP            45h
+prometheus-kube-state-metrics             ClusterIP   10.96.44.28     <none>        8080/TCP                     45h
+prometheus-operated                       ClusterIP   None            <none>        9090/TCP                     45h
+prometheus-prometheus-node-exporter       ClusterIP   10.96.35.74     <none>        9100/TCP                     45h
+
+#This prometheus-kube-state-metrics  is the state metrics service serving the pod exposing the scrpped data by the promethus
+#We will expose this service to th2 node port:
+
+$ kubectl expose svc prometheus-kube-state-metrics --type=NodePort --target-port=8080 --name=prometheus-kube-state-metrics-exposed-nodeport-ext -n monitoring
+
+Why target port: 8080? Because, prometheus-kube-state-metrics  ClusterIP  10.96.44.28  <none> 8080/TCP  45h it is exposed on port 8080. on cluster IP, so asfter exposing this 8080 port on nodeport when you do 
+$oc get svc -n monitoring 
+prometheus-kube-state-metrics-exposed-nodeport-ext   NodePort    10.96.135.248   <none>        8080:30308/TCP    
+#Thsi means there is new service called prometheus-kube-state-metrics-exposed-nodeport-ext exposed on 8080 is availale 30308 port on nodeport.
+this means when you do: <IP of cluster>:30308 this metrics server will be available:
+http://172.18.0.2:30308/
+# To get the nodes ip: 
+kubectl get nodes -o wide
+
+#clic on metrics. and all the exposed metrics in terms of promql query and result is shown in the json.
+# Now CTRL+F and search "db" and copy any promql query:
+#for example, this is the query:
+kube_service_created{namespace="db",service="flask-app-service",uid="623e81c3-e612-4b5c-8918-c2813752bbce"}
+#put this query in http://localhost:9090/query where prometheus is exposed and it will show the answer in json.
+
+Same with grafana: go to 127.0.0.1:3000  -> explore -> run query in blue box put the query and execute and it will show the plotted thn
+
+###########################################################
+#Working with ingress:#####################################
+###########################################################
+
+kubectl apply -f postgres-ingress.yaml
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flask-app-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: flask.postgres    # Change to your desired domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: flask-app-service
+            port:
+              number: 80
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#this will expose port 80 on service flask-app-service. 
+# This wil be forwarded to port 8080 on local host, becasue:
+#config file of cluster is this:
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kind-test
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 8080
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 44300
+    protocol: TCP
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+
+#############################################################
+###Prometheus scrapping workloads using Service monitor######
+#############################################################
+
+#workload in db m=namespace, especifically flask-app front end.
+#We use image: yogender027/flask-app:0.1.3  this imag ethis piece of code in app.py:
+
+from prometheus_flask_exporter import PrometheusMetrics
+app = Flask(__name__)
+metrics = PrometheusMetrics(app)
+
+This exposes some default metrics for prometheus to collect at /metrics path at:
+http://172.18.0.2:3004/metrics 
+#172.18.0.2 is the Ip of node, and 3004 is the port where metrics server is availble, for example:
+
+est$ oc get svc
+NAME                TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
+flask-app-service   NodePort    10.96.166.68   <none>        80:30004/TCP   26
+
+#here port 80 inside cluster with clusterIP 10.96.166.68 si exposed at nodeport at 30004
+
+#This also can be reached at:
+http://172.18.0.2:8080 /metrics as at 8080 is also exposed for the kind cluser.
+
+#Now when you try to copy any metrics exposed such as:
+flask_http_request_total{method="GET",status="200"} 5.0
+#in grafana at explore -> query -> put query:
+flask_http_request_total{method="GET",status="200"}
+and it will show 5
+
+#You need: service monitor:
+
+<<<<<<<<<<<<<<<<<<<<<<<<
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: flask-app-monitor
+  namespace: monitoring  # Ensure this matches where Prometheus is running
+  labels:
+    release: prometheus  # This should match Prometheus's selector
+spec:
+  selector:
+    matchLabels:
+      app: flask-app  # Must match the labels in your Service
+  namespaceSelector:
+    matchNames:
+      - db  # Change if `flask-app-service` is in a different namespace
+  jobLabel: job
+  endpoints:
+    - port: http  # Match this with your service port name if defined
+      targetPort: 5000
+      path: /metrics  # Ensure Flask exposes metrics at this endpoint
+      scheme: http
+      interval: 30s
+      scrapeTimeout: 10s
+>>>>>>>>>>>>>>>>>>>>>>>>>
+
+And servcie should be like this:
+
+<<<<<<<<<<<
+apiVersion: v1
+kind: Service
+metadata:
+  name: mydb-service
+  labels:
+    app: postgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  clusterIP: None
+  selector:
+    app: postgres
+>>>>>>>>>>>>>>>
+
+Service monitor points to service. 
+
+
+
+########################################################################################################################################################
+########################################################################################################################################################
+########################################################################################################################################################
+
+########
+#Cilium#
+########
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kind-cilium
+networking:
+  disableDefaultCNI: true  # Ensures KIND does not use the default CNI, allowing Cilium installation
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 8081
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 44301
+    protocol: TCP
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+kubectl apply -f cilium-cluster.yaml
+
+Set kubectl context to "kind-kind-cilium"
+You can now use your cluster with:
+kubectl cluster-info --context kind-kind-cilium
+# cluster will remian in not ready until cilium is installed.
+
+#######
+#cilium
+#######
+
+helm repo add cilium https://helm.cilium.io/
+
+docker pull quay.io/cilium/cilium:v1.17.2
+kind load docker-image quay.io/cilium/cilium:v1.17.2 --name kind-cilium
+
+helm install cilium cilium/cilium --version 1.17.2 \
+   --namespace kube-system \ 
+   --set image.pullPolicy=IfNotPresent \
+   --set ipam.mode=kubernetes
+
+#You havesuccessfully installed cilium with hubble
+
+######################
+##install cilium cli:#
+######################
+
+CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+CLI_ARCH=amd64
+if [ "$(uname -m)" = "aarch64" ]; then CLI_ARCH=arm64; fi
+curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
+sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
+rm cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+
+
+#Check if installed:
+cilium status --wait
+
+
+
+####################################
+#Running flask app in cilium cluster
+####################################
+Some how type: ClusterIP has to be there in postgres svc
+
+
+
+
+
+helm uninstall cilium -n kube-system
+
+#install cilium using helm:
+helm install cilium cilium/cilium --version 1.17.2 \
+  --namespace kube-system \
+  --set image.pullPolicy=IfNotPresent \
+  --set ipam.mode=kubernetes \
+  --set ingressController.enabled=true \
+  --set ingressController.loadBalancerMode=dedicated \
+  --set operator.replicas=1 \
+  --set kubeProxyReplacement=true \
+  --set ingressController.hostNetwork.enabled=true
+
+helm install cilium cilium/cilium --version 1.17.2 \
+  --namespace kube-system \
+  --set image.pullPolicy=IfNotPresent \
+  --set ipam.mode=kubernetes \
+  --set operator.replicas=1 \
+  --set kubeProxyReplacement=true
+  
+
+helm install cilium cilium/cilium --version 1.17.2 \
+  --namespace kube-system \
+  --set operator.replicas=1
+  
+#Need to install cilium ingress controller:
+helm upgrade cilium cilium/cilium --version 1.17.2 \
+    --namespace kube-system \
+    --reuse-values \
+    --set ingressController.enabled=true \
+    --set ingressController.hostNetwork.enabled=true \
+    --set kubeProxyReplacement=true
+    
+helm upgrade cilium cilium/cilium --version 1.17.2 \
+    --namespace kube-system \
+    --reuse-values \
+    --set ingressController.hostNetwork.enabled=true
+
+kubectl -n kube-system rollout restart deployment/cilium-operator
+
+kubectl -n kube-system rollout restart ds/cilium
+
+kubectl get ingress flask-app-ingress -o yaml -n db
+
+#How to run a cuel inside the cluster with clusterIP:
+kubectl run -it --rm debug -n db --image=curlimages/curl --restart=Never -- curl http://10.96.24.214:80 -v
+
+#run curl inside teh cluster with host as header:
+kubectl run -it --rm debug -n db --image=curlimages/curl --restart=Never -- curl -H "Host: flask.postgres" http://10.96.24.214:80 -v
+
+kubectl run -it --rm debug -n db --image=curlimages/curl --restart=Never -- curl -H "Host: flask.postgres" http://10.96.126.204:80 -v
+
+
+#Create a pod called debug and keep it alive and run curl in it:
+kubectl run debug -n db --image=curlimages/curl --restart=Never -- sleep infinity
+#run this pod
+kubectl exec -it debug -n db -- sh
+
+
+curl -H "Host: flask.postgres" http://10.96.24.214:80 -v # this is cilium-ingress-svc
+curl -H "Host: flask.postgres" http://10.96.126.204:80 -v # this is flask-app-svc
+curl  http://10.96.126.204:80 -v # this is clusterIP of flask-app-svc
+#All three works but external host is not resolvable somehow
+
+10.96.126.204 
+#######################################
+#Checking cilium without ingress######
+######################################
+
+helm install cilium cilium/cilium --version 1.17.2 --namespace kube-system
+
+#this is working from debug pod no need to mention any host
+curl http://10.96.126.204:80 #this is flask svc IP
+
+This also works as this the flask pod IP exposed at 5000 is the flask app in the pod:
+curl http://10.244.0.132:5000
+
+~ $ nc -v -z -w 2 10.244.0.178 5432
+10.244.0.178 (10.244.0.178:5432) open
+This is postgre sis open to all. as it is writtebn in the response, As there is no network policy in place
+
+Apply thos networkPOlicy:
+
+<<<<<<<<<<<<<<<<<<<
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: "flask-app-to-db"
+  namespace: db
+spec:
+  endpointSelector:
+    matchLabels:
+      app: postgres
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: flask-app
+>>>>>>>>>>>>>>>>>>>>>>>
+
+#Now try in the debug pod:
+~ $ nc -v -z -w 2 10.244.0.178 5432
+nc: 10.244.0.178 (10.244.0.178:5432): Operation timed out
+#This means no connectity from debug pod
+
+curl http://10.96.126.204:80
+This also works as I am accessing flask-app-service IP exposed at port 80 from debug pod. I am inside cluster, as debug is inside cluster, but I am hitting flask-app-service whih is connected with the postgress pod, and which network policy allows th etraffic to postgres sts 
+
+##########
+###Check of postgres from another namespaces
+########
+2. No open a new namespace and create a debug pod there:
+k create namespace dummy
+
+#Create a pod called debug and keep it alive and run curl in it:
+kubectl run debug -n dummy --image=curlimages/curl --restart=Never -- sleep infinity
+#run this pod
+kubectl exec -it debug -n dummy -- sh
+
+#Try to acces postgres-0 pod which runs in db namespace from a pod called debug in dummy namespace:
+k delete cnp flask-app-to-db -n db
+k get pod postgres-0 -n dummy -0 wide #grab IP
+#In another vscode terminal do:
+kubectl exec -it debug -n dummy -- sh
+$ nc -v -z -w 2 10.244.0.254 5432
+10.244.0.254 (10.244.0.254:5432) open
+#This means porr 5432 is open at clusterIP 10.244.0.254
+#No apply cnp:
+k apply -f flask-postgres/postgres-networkPolicy.yaml -n db
+agin try access from dummy namespace:
+~ $ nc -v -z -w 2 10.244.0.254 5432
+nc: 10.244.0.254 (10.244.0.254:5432): Operation timed out
+#This is becasue on cnp only faslk application an access postgres
+
+
+
+
+
+###############
+#Layer7 check:#
+###############
+
+#in debug pod:
+curl http://10.96.126.204:80/metrics
+#outputs the metrics exposed by prometheus in flaks app in app.py. SO far so good.
+
+k aply -f l7-rule -n db
+<<<<<<<<<<<<<<<<<<<<<<<<<<
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: "l7-rule"
+spec:
+  endpointSelector:
+    matchLabels:
+      app: flask-app
+  ingress:
+    - toPorts:
+        - ports:
+            - port: '5000'
+              protocol: TCP
+          rules:
+            http:
+              - method: GET
+                path: "/"
+>>>>>>>>>>>>>>>>>>>>>>>>>
+this allows only / in the flask and denies any other for example /metrics which is exposed in flask app.py 
+
+Now open a new namespace and create a debug pod there, if its created already then open it:
+kubectl exec -it debug -n dummy -- sh
+do:
+
+curl http://10.244.0.193:5000/metrics
+Access denied.
+#Previsously it was working before cnp application.
+
+
+
+
+
+
+
+
+
+
+
+

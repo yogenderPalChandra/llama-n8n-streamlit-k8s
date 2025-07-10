@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit-ui
+  namespace: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit-ui
+  template:
+    metadata:
+      labels:
+        app: streamlit-ui
+    spec:
+      containers:
+        - name: streamlit
+          image: yogender027/streamlit-ui:1.0.0
+          ports:
+            - containerPort: 8501
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: rag-n8n-shared-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamlit-ui
+  namespace: ollama
+spec:
+  selector:
+    app: streamlit-ui
+  ports:
+    - protocol: TCP
+      port: 8501
+      targetPort: 8501
+  type: ClusterIP

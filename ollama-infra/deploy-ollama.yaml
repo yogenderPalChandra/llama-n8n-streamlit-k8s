@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+      - name: ollama
+        image: yogender027/ollama-custom:latest
+        ports:
+        - containerPort: 11434
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        volumeMounts:
+        - mountPath: /root/.ollama
+          name: ollama-storage
+        resources:
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/sh", "-c", "ollama run llama3"]
+      volumes:
+      - name: ollama-storage
+        persistentVolumeClaim:
+          claimName: ollama-pvc

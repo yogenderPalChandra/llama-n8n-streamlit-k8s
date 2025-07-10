@@ -1,0 +1,89 @@
+{
+    "nodes": [
+      {
+        "parameters": {
+          "interval": 60,
+          "unit": "seconds"
+        },
+        "name": "Check Every Minute",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [200, 200]
+      },
+      {
+        "parameters": {
+          "command": "#!/bin/sh\nmkdir -p /tmp/n8n\ntouch /tmp/n8n/last_seen.txt\n\nlatest=$(ls -t /data 2>/dev/null | head -n 1)\nlast=$(cat /tmp/n8n/last_seen.txt)\n\nif [ \"$latest\" != \"$last\" ] && [ -n \"$latest\" ]; then\n  echo \"$latest\" > /tmp/n8n/last_seen.txt\n  echo '{\"newFile\": true}'\nelse\n  echo '{\"newFile\": false}'\nfi",
+          "jsonOutput": true
+        },
+        "name": "Check New File",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [400, 200]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{$json[\"newFile\"]}}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "name": "New File Detected?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [600, 200]
+      },
+      {
+        "parameters": {
+          "requestMethod": "POST",
+          "url": "http://rag-agent.ollama.svc.cluster.local/reindex",
+          "jsonParameters": true,
+          "options": {}
+        },
+        "name": "Trigger Reindex",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [800, 180]
+      }
+    ],
+    "connections": {
+      "Check Every Minute": {
+        "main": [
+          [
+            {
+              "node": "Check New File",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check New File": {
+        "main": [
+          [
+            {
+              "node": "New File Detected?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "New File Detected?": {
+        "main": [
+          [
+            {
+              "node": "Trigger Reindex",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      }
+    }
+  }
+  
