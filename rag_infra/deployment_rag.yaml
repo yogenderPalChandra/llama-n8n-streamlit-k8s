@@ -23,7 +23,7 @@ spec:
             value: http://ollama-service.ollama.svc.cluster.local:11434
         volumeMounts:
           - name: local-model-volume
-            mountPath: /app/local   # Adjust based on your app
+            mountPath: /app/local
             readOnly: false
           - mountPath: /data
             name: shared-data
