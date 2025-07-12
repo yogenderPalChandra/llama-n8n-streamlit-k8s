@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+  namespace: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      containers:
+      - name: open-webui
+        image: ghcr.io/open-webui/open-webui:main
+        ports:
+        - containerPort: 8080
+        env:
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama-service.ollama.svc.cluster.local:11434"
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+          requests:
+            memory: "512Mi"
+            cpu: "0.5"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui-service
+  namespace: ollama
+spec:
+  selector:
+    app: open-webui
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+    nodePort: 31434
+  type: NodePort

@@ -44,8 +44,13 @@ spec:
   selector:
     app: rag-agent
   ports:
-    - protocol: TCP
+    - name: tollamapod
+      protocol: TCP
       port: 80
+      targetPort: 8080
+    - name: fromstreamlittoquery
+      protocol: TCP
+      port: 8080
       targetPort: 8080
 ---
 apiVersion: v1

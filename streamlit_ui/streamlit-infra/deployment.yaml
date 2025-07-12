@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: streamlit
-          image: yogender027/streamlit-ui:1.0.0
+          image: yogender027/streamlit-ui:1.0.1
           ports:
             - containerPort: 8501
           volumeMounts:

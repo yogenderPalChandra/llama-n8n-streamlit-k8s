@@ -1,28 +1,59 @@
 import streamlit as st
-import os
 import requests
+import os
 
-SHARED_FOLDER = "/data"
+# Constants
+DATA_DIR = "/data"
+RAG_AGENT_URL = "http://rag-agent.ollama.svc.cluster.local:8080/query"
 N8N_WEBHOOK_URL = "http://n8n.ollama.svc.cluster.local:5678/webhook/reindex"
 
-st.title("📄 Upload Case Files")
+st.set_page_config(page_title="Staff Knowledge Assistant", layout="centered")
 
-uploaded_file = st.file_uploader("Upload a .txt file", type="txt")
+st.title("📄 Staff Document Assistant")
+
+# --- File Upload Section ---
+st.header("📤 Upload a Text Document")
+
+uploaded_file = st.file_uploader("Upload .txt file", type="txt")
 
 if uploaded_file is not None:
-    file_path = os.path.join(SHARED_FOLDER, uploaded_file.name)
-    
-    # Save uploaded file to shared PVC
-    with open(file_path, "wb") as f:
+    save_path = os.path.join(DATA_DIR, uploaded_file.name)
+    with open(save_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    st.success(f"✅ Saved {uploaded_file.name} to shared volume.")
+    st.success(f"✅ Uploaded `{uploaded_file.name}`")
 
-    # Trigger n8n to reindex
+    # Notify n8n to reindex
     try:
-        resp = requests.post(N8N_WEBHOOK_URL)
-        if resp.status_code == 200:
-            st.success("🔁 Reindex triggered via n8n!")
+        r = requests.post(N8N_WEBHOOK_URL)
+        if r.status_code == 200:
+            st.success("🔁 Reindex ttriggered successfully.")
         else:
-            st.warning(f"n8n responded with status code: {resp.status_code}")
+            st.error(f"Failed to trigger reindex: {r.status_code}")
     except Exception as e:
-        st.error(f"Error contacting n8n: {e}")
+        st.error(f"Error calling n8n webhook: {e}")
+
+st.divider()
+
+# --- Query Section ---
+st.header("❓ Ask a Question")
+
+question = st.text_input("Type your question here:")
+
+if st.button("Ask"):
+    if not question.strip():
+        st.warning("Please enter a question.")
+    else:
+        try:
+            response = requests.post(
+                RAG_AGENT_URL,
+                json={"question": question},
+                timeout=1180
+            )
+            if response.status_code == 200:
+                data = response.json()
+                st.success("Answer:")
+                st.markdown(data["answer"])
+            else:
+                st.error(f"Error: {response.status_code}")
+        except Exception as e:
+            st.error(f"Error contacting RAG agent: {e}")
