@@ -47,7 +47,7 @@ if st.button("Ask"):
             response = requests.post(
                 RAG_AGENT_URL,
                 json={"question": question},
-                timeout=1180
+                timeout=3000000
             )
             if response.status_code == 200:
                 data = response.json()

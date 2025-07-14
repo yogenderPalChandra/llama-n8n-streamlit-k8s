@@ -4,7 +4,7 @@ from langchain_community.vectorstores import Chroma
 from langchain.embeddings import HuggingFaceEmbeddings
 import os
 
-def run_query(question, persist_dir="rag_pipeline/db"):
+def run_query(question, persist_dir="/app/rag_pipeline/db"):
     print(f"Question received: {question}")
     embedding = HuggingFaceEmbeddings(model_name="/app/local")
     vectordb = Chroma(persist_directory=persist_dir, embedding_function=embedding)

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: rag-agent
-        image: yogender027/ollama-n8n-rag:1.0.1
+        image: yogender027/ollama-n8n-rag:1.0.0
         ports:
         - containerPort: 8080
         env:

@@ -9,17 +9,7 @@ PERSIST_DIR = "/app/rag_pipeline/db"
 
 RE_INDEX_PATH = "/data"
 
-# Bootstrap vector DB
-# def bootstrap_vector_db():
-#     os.makedirs("rag_pipeline/data", exist_ok=True)
-#     if not os.path.exists(PERSIST_DIR):
-#         print("[INFO] Bootstrapping vector DB...")
-#         chunks = load_and_split(DOC_PATH)
-#         print ("[INFO] printing Chunks:", chunks)
-#         create_vectorstore(chunks, persist_dir=PERSIST_DIR)
 
-# # Initialize agent and Flask app
-# bootstrap_vector_db()
 agent = setup_agent()
 app = Flask(__name__)
 
@@ -31,6 +21,7 @@ def query():
 
     question = data["question"]
     answer = agent.invoke(question)
+    #answer = agent.invoke({"input": question}) 
     return jsonify({"question": question, "answer": answer})
 
 # 🔧 New endpoint for n8n to call
